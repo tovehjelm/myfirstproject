@@ -1,9 +1,9 @@
 ---
 title: "R basics"
-output: pdf_document
+output: word_document
 ---
 
-# About R
+# 1.1 About R
 - R came from S
 - R works in memory
     + Microsoft has out-of-memory processing capabilities 
@@ -12,7 +12,7 @@ output: pdf_document
 - R is case sensitive
 - There's a package for that!
 
-# R packages
+# 1.2 R packages
 We can install from CRAN
 ```{r eval=FALSE}
 install.packages("tidyverse")
@@ -29,7 +29,7 @@ tidyverse_packages()
 
 ```
 
-# Vectors
+# 1.3 Vectors
 1 dimensional objects
 
 ```{r}
@@ -52,7 +52,23 @@ colors[1:2]
 colors[-c(1,2)]
 
 ```
-## Caret package
+# 2.1 Tidyverse
+
+To clean and prepare data from different sources.
+
+```{r}
+library(tidyverse)
+
+# Change "data" to where your files are.
+# Remove the col_types bit if your columns
+# are fairly type safe.
+list.files("data", full.names = TRUE) %>%
+  map_df(read_csv, col_types = cols("c")) %>% 
+  bind_rows() %>% 
+  nrow()
+```
+
+# 2.2 Caret package
 Create datasets with training data (features) and training outcome (what we want to predict)
 Create datasets to test the model. Test data with features that are used to predict, and test outcome that has the actual cylender of the data we test.
 method = what model we are using, neural network, regression etcetera. 
@@ -83,4 +99,120 @@ model <- train(training_data, training_outcome,
 predictions <- predict(model, test_data)
 predictions
 ```
+#2.3 Visualizations
+
+```{r}
+library(ggplot2)
+library(datasauRus)
+
+myPlot<- ggplot(datasaurus_dozen, aes(x,y)) +
+           geom_point()
+myPlot
+```
+```{r}
+myPlot + facet_wrap(~dataset)
+```
+Uses the myPlot we defined but with the simpsons_paradox dataset instead of datasaurus_dozen. Makes it possible to reuse models with other data. 
+
+(Simpson’s Paradox is the phenomenon where high level statistics provide one conclusion but evaluating sub-groups within the data provides a very different conclusion.)
+
+```{r}
+myPlot %+% simpsons_paradox
+```
+# 32. Visualizations, Common charts
+
+```{r}
+library(ggplot2)
+library(datasauRus)
+library(cowplot)
+
+ggplot(datasaurus_dozen, aes(x = x, y = y)) + geom_point()
+
+p <- ggplot(datasaurus_dozen, aes(x = x, y = y, color=dataset)) + geom_line() + facet_wrap(~dataset)
+p
+
+ggplot(data = mtcars, aes(x = rownames(mtcars), y = mpg)) + geom_col() + theme(axis.text.x = element_text(angle = 90))
+
+plot1 <- ggplot(data = simpsons_paradox, aes(x = x, y = y)) + geom_point()
+plot2 <- ggplot(data = mtcars, aes(x = am)) + geom_bar()
+ggplot(data = mtcars, aes(x = rownames(mtcars), y = mpg)) + geom_col()
+ggplot(data = simpsons_paradox, aes(x = x, y = y, colour = dataset)) + geom_jitter(width = 5)
+ggplot(data = simpsons_paradox, aes(x = x, y = y, colour = dataset)) + geom_point(alpha = 0.5)
+ggplot(data = simpsons_paradox, aes(x = x, y = y, size = dataset, colour = dataset, 
+    shape = dataset, alpha = dataset)) + geom_point()
+ggplot(data = simpsons_paradox, aes(x = x, y = y, group = dataset, colour = dataset)) + 
+    geom_line()
+
+
+plot_grid(plot1,plot2)
+
+```
+
+## Exercises
+```{r}
+
+#Iris
+ggplot(data = iris, aes(x = Sepal.Width, y = Sepal.Length, color = Species, size = Petal.Width+Petal.Length)) + geom_point(alpha = 0.8)
+
+#Barchart, get max for all y values
+datasaurus_dozen %>%
+  group_by(dataset) %>%
+  summarise(y=max(y)) %>%
+  ggplot(aes(x=dataset, y=y)) +
+  geom_col()
+
+
+```
+## 33.Visualizations, Density charts
+
+```{r}
+ggplot(data = mtcars, aes(x = wt)) + geom_histogram()
+ggplot(data = mtcars, aes(x = wt)) + geom_density()
+ggplot(data = mtcars, aes(x = as.factor(am), y = wt)) + geom_violin()
+ggplot(data = mtcars, aes(x = wt, mpg)) + geom_bin2d()
+```
+
+## 34. Faceting
+```{r}
+ggplot(data = datasaurus_dozen, aes(x = x, y = y)) + geom_point() + facet_wrap(~dataset)
+
+ggplot(data = datasaurus_dozen, aes(x = x, y = y)) + geom_point() + facet_wrap(~dataset, 
+    nrow = 5)
+```
+# Exercises
+Create a facet scatterplot for simpsons_paradox
+
+```{r}
+library(ggthemes)
+ggplot(data = simpsons_paradox, aes(x = x, y = y)) + geom_point() + facet_wrap(~dataset) + theme_classic()
+```
+## Packages that are good for Data Exploration
+
+```{r eval=FALSE}
+install.packages("devtools")
+devtools::install_github("krupanss/IEDA")
+# skimr::skim(dataset) to get a good overview of a dataset
+# GGally::ggpair(dataset) to pair all variables with eachother
+
+```
+## Clean Ecommerce-data (Description contains a stringvalue with \x, R does not like that)
+
+```{r}
+ecommerce %>%
+  mutate(Description=str_remove_all(Description,"[^[:alnum:]]")) %>% 
+  skimr::skim()
+
+```
+
+```{r}
+ecommerce %>% 
+  ggplot(aes(x = Quantity)) + geom_density()
+```
+## Create awesome data explorer data
+```{r}
+#library(DataExplorer)
+#DataExplorer::create_report(dataset, "filename.html")
+```
+
+
 
