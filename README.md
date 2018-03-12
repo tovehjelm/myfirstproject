@@ -1,4 +1,4 @@
 #My First R project
 
 ## Gifs are important
-![You can do this!](https://media.giphy.com/media/Z2lMI3RoVv2ne/giphy.gif)
+![Marilyn Manson knows that you've got this](https://media.giphy.com/media/13fOcIAmaXvF9S/giphy.gif)
