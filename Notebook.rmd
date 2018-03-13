@@ -186,15 +186,33 @@ Create a facet scatterplot for simpsons_paradox
 library(ggthemes)
 ggplot(data = simpsons_paradox, aes(x = x, y = y)) + geom_point() + facet_wrap(~dataset) + theme_classic()
 ```
-## Packages that are good for Data Exploration
+## Packages
 
-```{r eval=FALSE}
+CRAN - cran.r-project.org, task views
+Bioconductor
+Follow:
+Mara Averick on twitter for good uses of packages
+
+## Follow
+
+Mara Averick on twitter
+Rladies
+Jumpingrivers
+R-bloggers
+Setosa.io
+
+#Packages that are good for Data Exploration
+
+
 install.packages("devtools")
 devtools::install_github("krupanss/IEDA")
 # skimr::skim(dataset) to get a good overview of a dataset
 # GGally::ggpair(dataset) to pair all variables with eachother
+# Simmer - for distinct simmulations
+# GGanimate - to plot changes over time
+# DataExplorer
+# rsample - to do samples
 
-```
 ## Clean Ecommerce-data (Description contains a stringvalue with \x, R does not like that)
 
 ```{r}
@@ -214,5 +232,294 @@ ecommerce %>%
 #DataExplorer::create_report(dataset, "filename.html")
 ```
 
+## Distribution and simulaton
 
+#Simulation one 
+With set variables
+
+```{r}
+#dnorm(dataset) - Density distribution
+#rnorm(n) - n random numbers from the distribution, default mean = 0, default sd = 1
+library(tidyverse)
+library(foreach)
+
+run_simulations <- 100
+nrows <- 5000
+sample_p <- 0.7
+dist_mean <- 0
+dist_sd <- 1
+p_threshold <- 0.05
+
+sim_results <- foreach(runs=seq_len(run_simulations), .combine = c) %do% #for all of the following, do this, in sequence
+  {
+  
+  outcome_var <- rnorm(nrows, mean = dist_mean, sd= dist_sd) #normally distributed sample with 5000 observations
+
+use_for_training <- sample(1:nrows, nrows*sample_p) #sample with 5000*0.7 random numbers between 1 and 5000.
+
+training <- outcome_var[use_for_training] #choose for training from the normal distribution in my_var the numbers that are in rows_in_training
+testing <- outcome_var[-use_for_training] #choose for testing from the normal dstribution in my_var the numbers that are NOT in rows_in_training (the other 0.3 percent)
+
+sim_ttest <- t.test(training, testing) 
+
+ifelse(sim_ttest$p.value > p_threshold,
+       "Same distribution, yay!",
+       "Oh no, not the same distribution")
+#Hypothesis - the two samples are NOT from the same distribution, means are not the same, there is a difference
+#Null hypothesis - the two samples are from the same distribution, means are the same, there is no difference
+
+}
+
+sim_results %>% 
+  fct_count() %>% 
+  mutate(prop=scales::percent(n/sum(n)))
+#gives a table of the counts of the times the result was "Means the same!" and the times it was "Means not the same!"
+
+```
+
+#Simulation two
+With different values for the variables, to see how different variables effect the result - with just one simulation to see that it works. More iterations in the next step. 
+
+```{r}
+
+library(tidyverse)
+library(foreach)
+
+r_simulations <- seq_len(1)
+nrows <- seq(5000, 200000, by = 10000) #sequence from 5000-200000, add 10000 each iteration.
+sample_p <- c(.7, .8, .9)
+dist_mean <- 0
+dist_sd <- 1:10
+p_threshold <- c(0.05, 0.1) #for p-hacking
+
+#To create all combinations of factors that impact the outcome: 
+combos<-expand.grid( 
+  r=r_simulations, 
+  n=nrows,
+  s=sample_p,
+  m=dist_mean,
+  sd=dist_sd,
+  p=p_threshold)
+nrow(combos)
+
+sim_results <- foreach(t=1:nrow(combos), 
+                       .combine=rbind) %do% {
+  df <- combos[t,]
+  outcome_var <- rnorm(df$n, mean = df$m, sd=df$sd) 
+  use_for_training <- sample(1:df$n, df$n*df$s) 
+  training <- outcome_var[use_for_training] 
+  testing <- outcome_var[-use_for_training] 
+  sim_ttest <- t.test(training, testing) 
+  df$result <- ifelse(sim_ttest$p.value > df$p,
+       "Same distribution",
+       "Not the same distribution")
+df
+
+}
+
+sim_results %>% 
+  count(result) %>% 
+  mutate(prop=scales::percent(nn/sum(nn)))
+
+
+```
+
+#Simulation three
+With parallel processing to be able to run multiple sequences at the same time
+
+```{r}
+library(tidyverse)
+library(foreach)
+library(parallel)
+library(doParallel)
+my_machine <- makeCluster(detectCores())
+registerDoParallel(my_machine) #Use all four cores on the computer (more cores running on server)
+
+r_simulations <- seq_len(100)
+nrows <- seq(5000, 200000, by = 10000) 
+sample_p <- c(.7, .8, .9)
+dist_mean <- 0
+dist_sd <- 1:10
+p_threshold <- c(0.05, 0.1) 
+
+combos<-expand.grid(
+  r=r_simulations, 
+  n=nrows,
+  s=sample_p,
+  m=dist_mean,
+  sd=dist_sd,
+  p=p_threshold)
+nrow(combos)
+
+sim_results <- foreach(t=1:nrow(combos), 
+                       .combine=rbind) %dopar% #do in parallel
+  {
+  df <- combos[t,]
+  outcome_var <- rnorm(df$n, mean = df$m, sd=df$sd) 
+  use_for_training <- sample(1:df$n, df$n*df$s) 
+  training <- outcome_var[use_for_training] 
+  testing <- outcome_var[-use_for_training] 
+  sim_ttest <- t.test(training, testing) 
+  df$result <- ifelse(sim_ttest$p.value > df$p,
+       "Same distribution",
+       "Not the same distribution")
+df
+
+}
+
+sim_results %>% 
+  count(result) %>% 
+  mutate(prop=scales::percent(nn/sum(nn)))
+
+library(ggplot2)
+sim_results %>% 
+  mutate(sim=row_number()) %>% 
+  gather(lever, value, -r, -sim, -result) %>% 
+  count(lever, value, result) %>% 
+  filter(result!="Same distribution") %>% 
+  filter(lever!="m") %>% 
+  ggplot(aes(x=value, y=n)) +
+  geom_line(color="blue") + 
+  facet_wrap(~lever, scales = "free") +
+  theme_minimal() +
+  geom_smooth()
+  
+```
+
+##Predictions
+
+```{r}
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(igraph)
+library(skimr)
+data(AlzheimerDisease) #Data to use
+predictors %>% 
+  cbind(diagnosis) ->
+  alzheimers #Combine columns from the predictors and diagnosis tables
+
+DataExplorer::create_report(alzheimers, "alzheimers.html")
+
+#From the report we can see that there are some weird distributions, and some correlations that we might want to look into
+
+alzheimers %>% 
+  ggplot(aes(x=Thyroid_Stimulating_Hormone)) +
+  geom_histogram()
+
+alzheimers %>% 
+  filter(Thyroid_Stimulating_Hormone == min(Thyroid_Stimulating_Hormone)) %>% 
+  skimr::skim() # Look at the histograms for the variables with the rows where the value is extremely low, to see if there are any other weird distributions for these
+
+alzheimers %>% 
+  mutate(male = factor(male), #1
+         Genotype = fct_infreq(fct_lump(Genotype, n=3))) -> #2
+  alzheimers
+#1 Turn into categorical rather than numeric
+#2 fct_lump, lumps together the last categorical (n=3 means that you are not lumping together the first 3), fct_infreq changes from ordered alphabetically to most frequent to less frequent. This new cleaned data becomes the new dataset.
+
+#Preparation to be able to create a model
+#Splitting the data into sampledata with a training set and a testing set, using rsample
+
+library(rsample)
+library(recipes)
+
+alzheimers %>% 
+  initial_split(prop=.9) ->
+  alz_split
+
+alz_split %>% 
+  training() ->
+  alz_train
+
+alz_split %>% 
+  testing() ->
+  alz_test
+
+#The different variables are in very different scales, some are even negative, means that it is difficult to compare them, minmax-scoring (scale between 0-1), z-score (scale of -10 to +10, standard deviations). Using recepies. The following: dont touch diagnosis! Alz_processes will be diagnosis predicted by everything else.
+
+alz_train %>% 
+  recipe(diagnosis ~ .) %>% 
+  step_center(all_numeric()) %>% #1
+  step_scale(all_numeric()) %>%  #2
+  prep(training=alz_train) -> #3
+alz_preprocess 
+
+#1 step_center says how far away from the mean they are, only on the numeric columns, the other once doesnt make sense
+#2 step_Scale changes to z-scores, devides the means by the standard, only numeric
+#3 depending on that data, what should the scaling look like, wont train until you do the prep
+
+#We still have 130 numeric values - since we only have twice as many rows that is way too many
+#We will use step_corr from recepies package - high correlation filter. 
+# Other fun functions from recipes: There are also functions for filling in missing values, collapse some categorical values (like the fct_lump), shuffle, filter, and much more! step_*-functions.
+
+alz_preprocess %>% 
+  step_corr(all_numeric()) %>% #1
+  step_nzv(all_predictors()) %>% #2
+  step_zv(all_predictors()) %>% #3 
+  step_pca(all_numeric()) %>% #4 
+  prep(training=alz_train) ->
+  alz_preprocess
+  
+  #1 Looks for variables that have a high correlation. Keeps the one in the correlation pair that have fewest correlations above a certain value to other variables
+#2 Delete the once with near zero variance. Where there is one very, very dominant variable
+#3 Delete variables with zero variance
+#4 principle component analysis - chooses the pc:s that are most responsible for the differences - has most effect on the thing we are trying to predict
+  
+alz_preprocess %>% 
+  bake(alz_train) -> #to apply it to the data in alz_train
+  alz_train_p
+
+alz_preprocess %>% 
+  bake(alz_test) -> #to apply it to the data in alz_test
+  alz_test_p
+
+View(alz_train_p) #View the processed dataset
+
+#Building the classification model, glm-function, general linear model
+
+rm("diagnosis")
+
+alz_train_p %>% 
+  glm(diagnosis~ ., data=., family = "binomial") ->
+  alz_glm_full #family - what is the distribution family we are using, its binomial because we only have two descrete values, control or impaired
+
+library(broom)
+library(yardstick)
+library(modelr)
+
+alz_glm_full %>%
+  broom::glance() 
+
+#when comparing models fitted by maximum likelihood of the same data, pick the one with smallest AIC and BIC
+
+#Information about how the model is built:
+
+alz_glm_full %>% 
+  broom::tidy()
+
+alz_glm_full %>% 
+  broom::augment() %>% 
+  View()
+
+#Score model using the test data
+
+alz_test_p %>% 
+  modelr::add_predictions(alz_glm_full) %>% 
+  mutate(class = factor(ifelse(pred >=0, "Control", "Impaired"), levels = c("Impaired","Control"))) ->
+  alz_test_scored 
+
+alz_test_scored %>%  View()
+
+alz_test_scored %>% 
+  yardstick::conf_mat(diagnosis, class) #Ger en false-positive etc matris
+
+alz_test_scored %>% 
+  yardstick::accuracy(diagnosis, class) #Testa accuracy - the number of correctly categorized divided by the total number (in this case 21/33 =0.6363636 )
+
+alz_test_scored %>% 
+  yardstick::spec(diagnosis, class)#the once that you get right that are positive 21/25
+
+alz_test_scored %>%
+  yardstick::sens(diagnosis, class) #the once that you get right that are negative, 0/8
+```
 
