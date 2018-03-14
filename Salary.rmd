@@ -1,0 +1,172 @@
+---
+title: "Salary Prediction"
+output: word_notebook
+---
+
+```{r}
+library(tidyverse)
+library(AppliedPredictiveModeling)
+library(igraph)
+library(skimr)
+library(broom)
+library(yardstick)
+library(modelr)
+library(rsample)
+library(recipes)
+library(FFTrees)
+library(readr)
+library(optiRum)
+IBMdata <- read_csv("C:/Users/Admin/Downloads/ibm-hr-analytics-employee-attrition-performance/WA_Fn-UseC_-HR-Employee-Attrition.csv")
+#View(IBMdata)
+
+#DataExplorer::create_report(IBMdata, "IBMdata.html")
+
+  IBMdata %>% 
+    mutate_if(~is.numeric(.)&n_distinct(.)<=5, factor) %>% 
+    mutate_if(is.character, factor) %>% 
+    mutate(Education = fct_recode(Education,
+               "Below College" = "1",
+               College = "2",
+               Bachelor = "3",
+               Master = "4",
+               Doctor = "5")) %>% 
+    mutate(EnvironmentSatisfaction = fct_recode(EnvironmentSatisfaction,
+               Low = "1",
+               Medium = "2",
+               High = "3",
+               "Very high" = "4")) %>% 
+    mutate(JobInvolvement = fct_recode(JobInvolvement,
+               Low = "1",
+               Medium = "2",
+               High = "3",
+               "Very high" = "4")) %>% 
+    mutate(JobSatisfaction = fct_recode(JobSatisfaction,
+               Low = "1",
+               Medium = "2",
+               High = "3",
+               "Very high" = "4")) %>%
+     mutate(PerformanceRating = fct_recode(PerformanceRating,
+               Low = "1",
+               Good = "2",
+               Excellent = "3",
+               Outstanding = "4")) %>% 
+     mutate(RelationshipSatisfaction = fct_recode(RelationshipSatisfaction,
+               Low = "1",
+               Medium = "2",
+               High = "3",
+               "Very high" = "4")) %>% 
+     mutate(WorkLifeBalance = fct_recode(WorkLifeBalance,
+               Bad = "1",
+               Good = "2",
+               Better = "3",
+               Best = "4")) -> IBMdata
+  
+IBMdata$EmployeeCount = NULL
+IBMdata$StandardHours = NULL
+IBMdata$Over18 = NULL
+IBMdata$EmployeeNumber = NULL
+  
+#scale_recode <- function (x) {fct_recode(factor(x),
+                                         #"Low" = "1",
+                                         #"Medium" = "2",
+                                         #"High" = "3",
+                                         #"Very high" = "4")}
+
+#mutate_if(~is.numeric(.) & identical(sort(unique(.)), 1:4), scale_recode) -> IBMdata
+  
+IBMdata %>% 
+  initial_split(prop=.9) ->
+  IBM_split
+
+IBM_split %>% 
+  training() ->
+  IBM_train
+
+IBM_split %>% 
+  testing() ->
+  IBM_test
+   
+IBM_train %>% 
+  recipe(Attrition ~ .) %>% 
+  step_center(all_numeric()) %>% 
+  step_scale(all_numeric()) %>%  
+  prep(training=IBM_train) -> 
+IBM_preprocess   
+
+IBM_preprocess %>% 
+  step_corr(all_numeric(), threshold = 0.8) %>% 
+  step_nzv(all_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_upsample(Attrition) %>%
+  step_pca(all_numeric()) %>%  
+  prep(training=IBM_train, retain=TRUE) ->
+  IBM_preprocess
+
+IBM_preprocess %>% 
+  juice(all_outcomes(), all_predictors()) -> 
+  IBM_train_p
+
+IBM_preprocess %>% 
+  bake(IBM_test) -> 
+  IBM_test_p
+
+IBM_train_p %>% 
+  glm(Attrition~ ., data=., family = "binomial") ->
+  IBM_glm_full 
+
+IBM_glm_full %>%
+  broom::glance() 
+
+IBM_glm_full %>% 
+  broom::tidy()
+  
+IBM_glm_full %>% 
+  broom::augment() %>% 
+  mutate(prob=logit.prob(.fitted)) %>% 
+  count(Attrition, prob) %>% 
+  spread(Attrition, n, fill = 0) %>% 
+  mutate(yes_sum = sum(Yes),
+         no_sum = sum(No)) %>% 
+  mutate(yes_cumsum = cumsum(Yes),
+         no_cumsum = cumsum(No)) %>% 
+  mutate(yes_correct = yes_cumsum,
+         no_correct = no_sum - no_cumsum) %>% 
+  mutate(sensitivity = no_correct/no_sum,
+         specificity = yes_cumsum/yes_sum) %>% 
+  mutate(accuracy = (yes_correct + no_correct)/
+           (yes_sum + no_sum),
+bal_acc = (sensitivity + specificity)/2
+) %>% View()
+
+#Above /\ creating columns with the sensitivity and specificity based on the probability
+
+IBM_test_p %>% 
+  modelr::add_predictions(IBM_glm_full) %>% 
+  mutate(class = factor(ifelse(pred >=1.6, "Yes", "No"))) ->
+  IBM_test_scored
+
+IBM_test_scored %>% 
+  yardstick::conf_mat(Attrition, class) #Ger en false-positive etc matris
+
+IBM_test_scored %>% 
+  yardstick::accuracy(Attrition, class) #Testa accuracy - the number of correctly categorized divided by the total number 
+
+IBM_test_scored %>% 
+  yardstick::spec(Attrition, class)#the once that you get right that are positive
+
+IBM_test_scored %>%
+  yardstick::sens(Attrition, class) #the once that you get right that are negative
+
+IBM_glm_full %>% 
+  broom::augment() %>% 
+  select(Attrition:.fitted) %>% 
+  mutate(class=factor(ifelse(.fitted >=0, "No","Yes"),
+                      levels = c("Yes", "No"))) %>% 
+  mutate(correct=Attrition == class) %>% 
+  FFTrees(correct ~ . , data = .) %>% 
+  plot()
+
+
+
+```
+

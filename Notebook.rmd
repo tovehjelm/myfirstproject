@@ -393,12 +393,17 @@ library(tidyverse)
 library(AppliedPredictiveModeling)
 library(igraph)
 library(skimr)
+library(broom)
+library(yardstick)
+library(modelr)
+library(rsample)
+library(recipes)
 data(AlzheimerDisease) #Data to use
 predictors %>% 
   cbind(diagnosis) ->
   alzheimers #Combine columns from the predictors and diagnosis tables
 
-DataExplorer::create_report(alzheimers, "alzheimers.html")
+#DataExplorer::create_report(alzheimers, "alzheimers.html")
 
 #From the report we can see that there are some weird distributions, and some correlations that we might want to look into
 
@@ -406,9 +411,9 @@ alzheimers %>%
   ggplot(aes(x=Thyroid_Stimulating_Hormone)) +
   geom_histogram()
 
-alzheimers %>% 
-  filter(Thyroid_Stimulating_Hormone == min(Thyroid_Stimulating_Hormone)) %>% 
-  skimr::skim() # Look at the histograms for the variables with the rows where the value is extremely low, to see if there are any other weird distributions for these
+#alzheimers %>% 
+  #filter(Thyroid_Stimulating_Hormone == min(Thyroid_Stimulating_Hormone)) %>% 
+  #skimr::skim() # Look at the histograms for the variables with the rows where the value is extremely low, to see if there are any other weird distributions for these
 
 alzheimers %>% 
   mutate(male = factor(male), #1
@@ -419,9 +424,6 @@ alzheimers %>%
 
 #Preparation to be able to create a model
 #Splitting the data into sampledata with a training set and a testing set, using rsample
-
-library(rsample)
-library(recipes)
 
 alzheimers %>% 
   initial_split(prop=.9) ->
@@ -457,7 +459,8 @@ alz_preprocess %>%
   step_nzv(all_predictors()) %>% #2
   step_zv(all_predictors()) %>% #3 
   step_pca(all_numeric()) %>% #4 
-  prep(training=alz_train) ->
+  step_upsample(diagnosis) %>% 
+  prep(training=alz_train, retain=TRUE) ->
   alz_preprocess
   
   #1 Looks for variables that have a high correlation. Keeps the one in the correlation pair that have fewest correlations above a certain value to other variables
@@ -470,10 +473,12 @@ alz_preprocess %>%
   alz_train_p
 
 alz_preprocess %>% 
-  bake(alz_test) -> #to apply it to the data in alz_test
+  juice(all_outcomes(), all_predictors()) -> 
   alz_test_p
 
-View(alz_train_p) #View the processed dataset
+alz_preprocess %>% 
+  bake(alz_test) -> #to apply it to the data in alz_test
+  alz_test_p
 
 #Building the classification model, glm-function, general linear model
 
@@ -482,10 +487,6 @@ rm("diagnosis")
 alz_train_p %>% 
   glm(diagnosis~ ., data=., family = "binomial") ->
   alz_glm_full #family - what is the distribution family we are using, its binomial because we only have two descrete values, control or impaired
-
-library(broom)
-library(yardstick)
-library(modelr)
 
 alz_glm_full %>%
   broom::glance() 
@@ -514,12 +515,12 @@ alz_test_scored %>%
   yardstick::conf_mat(diagnosis, class) #Ger en false-positive etc matris
 
 alz_test_scored %>% 
-  yardstick::accuracy(diagnosis, class) #Testa accuracy - the number of correctly categorized divided by the total number (in this case 21/33 =0.6363636 )
+  yardstick::accuracy(diagnosis, class) #Testa accuracy - the number of correctly categorized divided by the total number 
 
 alz_test_scored %>% 
-  yardstick::spec(diagnosis, class)#the once that you get right that are positive 21/25
+  yardstick::spec(diagnosis, class)#the once that you get right that are positive
 
 alz_test_scored %>%
-  yardstick::sens(diagnosis, class) #the once that you get right that are negative, 0/8
+  yardstick::sens(diagnosis, class) #the once that you get right that are negative
 ```
 

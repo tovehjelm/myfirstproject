@@ -1,0 +1,23 @@
+---
+title: "Recommendationengine"
+output: html_document
+---
+
+Using the Recommender we create a model where we can get predictions from the dataset MovieLense.Look at co-occurence, gets rid of the things that you've already used (boring), or that is not popular.
+We then use as to use the model, for a certain user (101 in this case), to turn the predictions into a list of n=10, from the predictions. So we turn the predictions in to a list of suggestions.
+
+Ex. Popularity, User-based Collaborative Filtering (UBCF), Single value decomposition (SVD), etc. 
+
+The data has to be in a matrix. use as.matrix() and as("binaryRatingMatrix") (for binary values,for example, did they buy this, Y/n) as("realRatingMatrix") (for real values,for example ratings(you might need to normalize it with normalize()(you might also binarize it, using binarize(minRating=1) to say did they like it Y/N instead of on a scale))
+
+```{r}
+library(recommenderlab)
+library(tidyverse)
+
+data(MovieLense)
+image(MovieLense)
+model <- Recommender(MovieLense, method = "POPULAR") 
+as(predict(model, MovieLense[101], n=10), "list")
+
+```
+
