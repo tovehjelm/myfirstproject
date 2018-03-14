@@ -119,10 +119,13 @@ IBM_glm_full %>%
 
 IBM_glm_full %>% 
   broom::tidy()
-  
+
 IBM_glm_full %>% 
-  broom::augment() %>% 
-  mutate(prob=logit.prob(.fitted)) %>% 
+  broom::augment()
+  
+IBM_test_p %>% 
+  modelr::add_predictions(IBM_glm_full) %>% 
+  mutate(prob=logit.prob(pred)) %>% 
   count(Attrition, prob) %>% 
   spread(Attrition, n, fill = 0) %>% 
   mutate(yes_sum = sum(Yes),
@@ -136,13 +139,18 @@ IBM_glm_full %>%
   mutate(accuracy = (yes_correct + no_correct)/
            (yes_sum + no_sum),
 bal_acc = (sensitivity + specificity)/2
-) %>% View()
+) %>% 
+  select(prob, sensitivity:bal_acc) %>% 
+  gather(measure, value, -prob) %>% 
+  ggplot(aes(x=prob, y = value, group = measure, color = measure)) +
+  geom_line(size=1.4) +
+  theme_minimal()
 
 #Above /\ creating columns with the sensitivity and specificity based on the probability
 
 IBM_test_p %>% 
   modelr::add_predictions(IBM_glm_full) %>% 
-  mutate(class = factor(ifelse(pred >=1.6, "Yes", "No"))) ->
+  mutate(class = factor(ifelse(pred >=1.5, "Yes", "No"))) ->
   IBM_test_scored
 
 IBM_test_scored %>% 

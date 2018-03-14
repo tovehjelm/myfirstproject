@@ -398,6 +398,8 @@ library(yardstick)
 library(modelr)
 library(rsample)
 library(recipes)
+library(FFTrees)
+
 data(AlzheimerDisease) #Data to use
 predictors %>% 
   cbind(diagnosis) ->
@@ -468,13 +470,13 @@ alz_preprocess %>%
 #3 Delete variables with zero variance
 #4 principle component analysis - chooses the pc:s that are most responsible for the differences - has most effect on the thing we are trying to predict
   
-alz_preprocess %>% 
-  bake(alz_train) -> #to apply it to the data in alz_train
-  alz_train_p
+#alz_preprocess %>% 
+  #bake(alz_train) -> #to apply it to the data in alz_train
+  #alz_train_p
 
 alz_preprocess %>% 
   juice(all_outcomes(), all_predictors()) -> 
-  alz_test_p
+  alz_train_p
 
 alz_preprocess %>% 
   bake(alz_test) -> #to apply it to the data in alz_test
@@ -522,5 +524,14 @@ alz_test_scored %>%
 
 alz_test_scored %>%
   yardstick::sens(diagnosis, class) #the once that you get right that are negative
+
+alz_glm_full %>% 
+  broom::augment() %>% 
+  select(diagnosis:.fitted) %>% 
+  mutate(class=factor(ifelse(.fitted >=0, "Control","Impaired"),
+                      levels = c("Impaired", "Control"))) %>% 
+  mutate(correct=diagnosis == class) %>% 
+  FFTrees(correct ~ . , data = .) %>% 
+  plot()
 ```
 
